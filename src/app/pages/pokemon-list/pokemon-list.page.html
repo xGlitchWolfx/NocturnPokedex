@@ -1,0 +1,215 @@
+<ion-header class="pokedex-header">
+  <ion-toolbar>
+    <div class="toolbar-shell">
+      <div>
+        <p class="eyebrow">Pokedex</p>
+        <ion-title>Nocturn</ion-title>
+      </div>
+    </div>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content [fullscreen]="true" class="pokedex-content">
+  <ion-refresher slot="fixed" (ionRefresh)="loadPokemonDirectory($event)">
+    <ion-refresher-content></ion-refresher-content>
+  </ion-refresher>
+
+  <div class="pokedex-shell">
+    <section class="hero-panel">
+      <p class="hero-kicker">Bienvenido a</p>
+      <h1>Nocturn Pokedex</h1>
+      <p class="hero-copy">
+        ¿Tienes curiosidad por tu Pokemon favorito?
+        Busca tu pokemon aqui, dale un vistazo.
+      </p>
+
+      <ion-searchbar
+        [(ngModel)]="searchTerm"
+        (ionInput)="applyFilter()"
+        placeholder="Busca cualquier Pokemon: Pikachu, Mew, 25..."
+        animated="true"
+        class="dex-search"
+      ></ion-searchbar>
+
+      <p class="error-text" *ngIf="errorMessage">{{ errorMessage }}</p>
+    </section>
+
+    <div class="dex-layout">
+      <section class="pokemon-list-panel">
+        <div class="panel-head">
+          <h2>Lista</h2>
+          <div class="generation-picker" *ngIf="!isGlobalSearchActive()">
+            <ion-select
+              [value]="selectedGenerationId"
+              interface="popover"
+              justify="end"
+              toggleIcon="chevron-down-outline"
+              (ionChange)="onGenerationChange($event.detail.value)"
+            >
+              <ion-select-option *ngFor="let generation of generations" [value]="generation.id">
+                {{ generation.label }}
+              </ion-select-option>
+            </ion-select>
+          </div>
+        </div>
+        <div class="toolbar-chip" *ngIf="!isGlobalSearchActive()">{{ currentGenerationCount() }} Pokemon encontrados</div>
+        <p class="helper-text" *ngIf="searchTerm.trim()">
+          Busqueda global activa: {{ visiblePokemonCount() }} resultados
+        </p>
+        <br>
+
+        <div class="loading-state" *ngIf="isLoadingList">
+          <ion-spinner name="crescent"></ion-spinner>
+          <p>Cargando Pokemon...</p>
+        </div>
+
+        <div class="pokemon-list" *ngIf="!isLoadingList">
+          <button
+            type="button"
+            class="pokemon-card"
+            *ngFor="let pokemon of filteredPokemon; trackBy: trackByPokemon"
+            (click)="loadPokemonDetail(pokemon)"
+            [class.active]="selectedPokemon?.id === pokemon.id"
+          >
+            <div class="pokemon-card-copy">
+              <span class="pokemon-number">#{{ pokemon.id | number: '2.0-0' }}</span>
+              <strong>{{ formatName(pokemon.name) }}</strong>
+            </div>
+            <img [src]="pokemon.image" [alt]="pokemon.name" loading="lazy" />
+          </button>
+        </div>
+      </section>
+
+      <section class="pokemon-detail-panel" *ngIf="selectedPokemon as pokemon" #detailPanel>
+        <div class="loading-overlay" *ngIf="isLoadingDetail">
+          <ion-spinner name="crescent"></ion-spinner>
+        </div>
+
+        <div class="detail-hero">
+          <div class="detail-copy">
+            <p class="hero-kicker">{{ pokemon.genus }}</p>
+            <h2>{{ formatName(pokemon.name) }}</h2>
+            <p class="pokemon-code">#{{ pokemon.id | number: '3.0-0' }}</p>
+          </div>
+
+          <div class="art-frame">
+            <img [src]="pokemon.image" [alt]="pokemon.name" />
+          </div>
+        </div>
+
+        <div class="detail-grid">
+          <article class="detail-card">
+            <h3>Descripcion</h3>
+            <p>{{ pokemon.flavorText }}</p>
+          </article>
+
+          <article class="detail-card">
+            <h3>Tipo y counters</h3>
+            <div class="section-stack">
+              <div>
+                <p class="detail-label">Tipo del Pokemon</p>
+                <div class="type-row">
+                  <span
+                    class="type-badge"
+                    *ngFor="let type of pokemon.types"
+                    [ngStyle]="getTypeStyle(type)"
+                  >
+                    {{ formatTypeName(type) }}
+                  </span>
+                </div>
+              </div>
+
+              <div>
+                <p class="detail-label">Debil contra</p>
+                <div class="type-row" *ngIf="pokemon.weaknesses.length > 0; else noWeaknesses">
+                  <span
+                    class="type-badge weakness-badge"
+                    *ngFor="let weakness of pokemon.weaknesses; trackBy: trackByWeakness"
+                    [ngStyle]="getTypeStyle(weakness.type)"
+                  >
+                    {{ formatTypeName(weakness.type) }}
+                  </span>
+                </div>
+
+                <ng-template #noWeaknesses>
+                  <p class="muted-copy">No se encontraron counters fuertes para este Pokemon.</p>
+                </ng-template>
+              </div>
+            </div>
+          </article>
+
+          <article class="detail-card">
+            <h3>Datos rapidos</h3>
+            <div class="fact-grid">
+              <div>
+                <span>Altura</span>
+                <strong>{{ pokemon.height }} m</strong>
+              </div>
+              <div>
+                <span>Peso</span>
+                <strong>{{ pokemon.weight }} kg</strong>
+              </div>
+              <div>
+                <span>Habitat</span>
+                <strong>{{ pokemon.habitat ? formatName(pokemon.habitat) : 'Desconocido' }}</strong>
+              </div>
+              <div>
+                <span>Felicidad base</span>
+                <strong>{{ pokemon.baseHappiness }}</strong>
+              </div>
+              <div>
+                <span>Captura</span>
+                <strong>{{ pokemon.captureRate }}</strong>
+              </div>
+              <div>
+                <span>Total stats</span>
+                <strong>{{ totalStats() }}</strong>
+              </div>
+            </div>
+          </article>
+
+          <article class="detail-card">
+            <h3>Habilidades</h3>
+            <div class="ability-list">
+              <div class="ability-pill" *ngFor="let ability of pokemon.abilities">
+                {{ formatName(ability.name) }}
+                <span *ngIf="ability.hidden">Oculta</span>
+              </div>
+            </div>
+          </article>
+
+          <article class="detail-card detail-card-wide">
+            <div class="card-head">
+              <h3>Movimientos que puede aprender</h3>
+              <span class="toolbar-chip">{{ pokemon.moves.length }}</span>
+            </div>
+
+            <div class="moves-grid">
+              <span
+                class="move-pill"
+                *ngFor="let move of visibleMoves(pokemon); trackBy: trackByMove"
+              >
+                {{ formatName(move) }}
+              </span>
+            </div>
+          </article>
+
+          <article class="detail-card">
+            <h3>Estadisticas base</h3>
+            <div class="stat-list">
+              <div class="stat-row" *ngFor="let stat of pokemon.stats">
+                <div class="stat-labels">
+                  <span>{{ formatStatName(stat.name) }}</span>
+                  <strong>{{ stat.value }}</strong>
+                </div>
+                <div class="stat-bar">
+                  <div class="stat-fill" [style.width.%]="statPercent(stat)"></div>
+                </div>
+              </div>
+            </div>
+          </article>
+        </div>
+      </section>
+    </div>
+  </div>
+</ion-content>
